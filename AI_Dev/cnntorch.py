@@ -1,0 +1,167 @@
+import torch 
+import torchvision
+import torchvision.transforms as transforms
+import torch.optim as optim 
+import torch.nn as nn 
+import torch.nn.functional as F
+import os
+from torchsummary import summary 
+
+dataset_dir = "human_detection_dataset/"
+
+classes = ('Human', 'None')
+
+# Epoch 19: model accuracy 62.50% 
+# https://www.tomasbeuzen.com/deep-learning-with-pytorch/chapters/chapter5_cnns-pt1.html 
+
+class NeuralNetwork(nn.Module): 
+    '''
+        Convulational Neural Network 
+    ''' 
+    def __init__(self): 
+        super().__init__()
+
+        self.main = torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels = 3, out_channels = 3, kernel_size=(5,5), padding = 1), 
+            torch.nn.ReLU(),
+            torch.nn.MaxPool2d((2,2)), 
+            torch.nn.Conv2d(in_channels = 3, out_channels = 3, kernel_size=(2, 2), padding = 1), 
+            torch.nn.ReLU(),
+            torch.nn.MaxPool2d((2,2)), 
+            torch.nn.Flatten(), 
+            torch.nn.Linear(6075, 2)
+        )
+
+
+    def forward(self, data): 
+        out = self.main(data)
+        return F.softmax(out, dim=1) 
+    
+    # def optimizer(self, leaarning_rate)
+
+
+
+def calculate_normalization(): 
+    '''
+        Caclulate Normalization which uses the z-score normlization
+        Z-score normlization allows for easier way for cnn to conceptualize 
+        and understand pixels, improving performance and gradient descent 
+        
+        Z-Score normlization
+        output[channel] = (input[channel] - mean[channel]) / sd[channel]
+    '''
+    transform_without_normilization = transforms.Compose([
+        transforms.Resize((180, 180)),
+        transforms.ToTensor()
+    ])
+
+    dataset = torchvision.datasets.ImageFolder(
+        root = dataset_dir, 
+        transform = transform_without_normilization 
+    )
+
+    data_load = torch.utils.data.DataLoader(
+        dataset, 
+        batch_size = len(dataset), 
+        shuffle = False 
+    )
+
+    mean = 0.0 
+    std = 0.0 
+    total_samples = 0 
+
+    for inputs, _ in data_load: 
+        batch_size = inputs.size(0)
+        inputs = inputs.view(batch_size, inputs.size(1), -1)
+        mean += inputs.mean(2).sum(0)
+        std += inputs.std(2).sum(0)
+        total_samples += batch_size 
+    
+    mean /= total_samples 
+    std /= total_samples 
+
+    # Mean and Standard Devivation of each pixel 
+    print("Mean", mean.tolist())
+    print("Standard Deviation", std.tolist())
+
+def split_dataset(): 
+    '''
+    '''
+
+    # Implement Normalization in the Transforms compose function 
+    # Reszie the image 180x180 
+    # Transfrom the image from [0, 255] to [0, 1]
+    # Normalize by output[channel] = (input[channel] - mean[channel]) / sd[channel]
+
+    # Mean [0.500492513179779, 0.49119654297828674, 0.4684107005596161]
+    # Standard Deviation [0.19734451174736023, 0.19522404670715332, 0.19612807035446167]
+    transform = transforms.Compose([
+        transforms.Resize((180, 180)), 
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean = [0.5, 0.491, 0.468], 
+            std = [0.197, 0.195, 0.196]
+        )
+    ])
+
+    dataset = torchvision.datasets.ImageFolder(
+        root = dataset_dir,
+        transform = transform
+    )
+
+    # dataset = torch.utils.data.ConcatDataset([dataset_human, dataset_none])
+
+    train_size = int(0.8 * len(dataset)) 
+    test_size = len(dataset) - train_size
+
+    train_set, test_set = torch.utils.data.random_split(
+        dataset, 
+        [train_size, test_size]
+    )
+
+    data_loader_train = torch.utils.data.DataLoader(
+        train_set, 32, 
+        shuffle = True, 
+    )
+
+    data_loader_validation = torch.utils.data.DataLoader(
+        test_set, 32, 
+        shuffle = False
+    )
+
+    network = NeuralNetwork() 
+    summary(network, (3, 180, 180))
+
+    optimizer = optim.SGD(network.parameters(), lr=0.001)
+
+    acc = 0 
+    count = 0
+    n_epochs = 20
+    for epoch in range(n_epochs): 
+        for input, labels in data_loader_train: 
+            pred = network.forward(input)
+            loss = nn.CrossEntropyLoss()(pred, labels)
+            
+            optimizer.zero_grad() 
+            loss.backward() 
+            optimizer.step() 
+    
+    with torch.no_grad(): 
+        for inputs, labels in data_loader_validation: 
+            y_pred = network.forward(inputs)
+            acc += (torch.argmax(y_pred, 1) == labels).float().sum()
+            count += len(labels)
+        
+
+    acc /= count 
+    print("Epoch %d: model accuracy %.2f%%" % (epoch, acc*100))
+
+    torch.save(network.state_dict(), "cifar10model.pth")
+
+            
+
+
+
+
+
+split_dataset()
