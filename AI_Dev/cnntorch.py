@@ -6,6 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 from torchsummary import summary 
+import matplotlib.pyplot as plt
+import numpy as np
 
 dataset_dir = "human_detection_dataset/"
 
@@ -22,16 +24,15 @@ class NeuralNetwork(nn.Module):
         super().__init__()
 
         self.main = torch.nn.Sequential(
-            torch.nn.Conv2d(in_channels = 3, out_channels = 3, kernel_size=(5,5), padding = 1), 
+            torch.nn.Conv2d(in_channels = 3, out_channels = 3, kernel_size=(5,5), padding = 3), 
             torch.nn.ReLU(),
             torch.nn.MaxPool2d((2,2)), 
-            torch.nn.Conv2d(in_channels = 3, out_channels = 3, kernel_size=(2, 2), padding = 1), 
+            torch.nn.Conv2d(in_channels = 3, out_channels = 3, kernel_size=(2, 2), padding = 3), 
             torch.nn.ReLU(),
             torch.nn.MaxPool2d((2,2)), 
             torch.nn.Flatten(), 
-            torch.nn.Linear(6075, 2)
+            torch.nn.Linear(6912, 2), 
         )
-
 
     def forward(self, data): 
         out = self.main(data)
@@ -50,14 +51,14 @@ def calculate_normalization():
         Z-Score normlization
         output[channel] = (input[channel] - mean[channel]) / sd[channel]
     '''
-    transform_without_normilization = transforms.Compose([
+    trasnform_with_normlization = transforms.Compose([
         transforms.Resize((180, 180)),
         transforms.ToTensor()
     ])
 
     dataset = torchvision.datasets.ImageFolder(
         root = dataset_dir, 
-        transform = transform_without_normilization 
+        transform = trasnform_with_normlization 
     )
 
     data_load = torch.utils.data.DataLoader(
@@ -126,31 +127,37 @@ def split_dataset():
 
     data_loader_validation = torch.utils.data.DataLoader(
         test_set, 32, 
-        shuffle = False
+        shuffle = True,
     )
 
     network = NeuralNetwork() 
-    summary(network, (3, 180, 180))
+    # summary(network, (3, 180, 180))
 
-    optimizer = optim.SGD(network.parameters(), lr=0.001)
+    optimizer = optim.SGD(network.parameters(), lr=0.001, momentum=0.9)
 
     acc = 0 
     count = 0
-    n_epochs = 20
+
+    # Optimize the model for 9 epochs
+    n_epochs = 10
+
+
     for epoch in range(n_epochs): 
-        for input, labels in data_loader_train: 
-            pred = network.forward(input)
+        for img, labels in data_loader_train: 
+            pred = network.forward(img)
             loss = nn.CrossEntropyLoss()(pred, labels)
-            
+
             optimizer.zero_grad() 
             loss.backward() 
             optimizer.step() 
     
-    with torch.no_grad(): 
-        for inputs, labels in data_loader_validation: 
-            y_pred = network.forward(inputs)
-            acc += (torch.argmax(y_pred, 1) == labels).float().sum()
-            count += len(labels)
+        with torch.no_grad(): 
+            for inputs, labels in data_loader_validation: 
+                y_pred = network.forward(inputs)
+                acc += (torch.argmax(y_pred, 1) == labels).float().sum()
+                count += len(labels)
+        
+        print(f"End of {epoch}, accuracy {(acc / count) * 100}")
         
 
     acc /= count 
