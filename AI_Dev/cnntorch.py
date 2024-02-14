@@ -8,6 +8,7 @@ import os
 from torchsummary import summary 
 import matplotlib.pyplot as plt
 import numpy as np
+import cv2
 # from utils.plotting import *
 
 plt.style.use('ggplot')
@@ -28,14 +29,16 @@ class NeuralNetwork(nn.Module):
         super().__init__()
 
         self.main = torch.nn.Sequential(
-            torch.nn.Conv2d(in_channels = 3, out_channels = 3, kernel_size=(5,5), padding = 3), 
+            torch.nn.Conv2d(in_channels = 3, out_channels = 32, kernel_size=(3,3), padding = 3), 
             torch.nn.ReLU(),
             torch.nn.MaxPool2d((2,2)), 
-            torch.nn.Conv2d(in_channels = 3, out_channels = 3, kernel_size=(2, 2), padding = 3), 
+            torch.nn.Conv2d(in_channels = 32, out_channels = 64, kernel_size=(2, 2), padding = 3), 
             torch.nn.ReLU(),
             torch.nn.MaxPool2d((2,2)), 
             torch.nn.Flatten(), 
-            torch.nn.Linear(6912, 2), 
+            torch.nn.Linear(147456, 128),
+            torch.nn.ReLU(),
+            torch.nn.Linear(128, 2) 
         )
 
     def forward(self, data): 
@@ -176,11 +179,16 @@ def split_dataset():
 def test_cnn(): 
     transform = transforms.Compose([
         transforms.Resize((180, 180)), 
+        transforms.Grayscale(num_output_channels=3),
         transforms.ToTensor(),
-        transforms.Normalize(
-            mean = [0.5, 0.491, 0.468], 
-            std = [0.197, 0.195, 0.196]
-        )
+        # transforms.Normalize(
+        #     mean = [0.5, 0.491, 0.468], 
+        #     std = [0.197, 0.195, 0.196]
+        # )
+        # transforms.Normalize(
+        #     mean = [0.5], 
+        #     std = [0.197]
+        # )
     ])
 
     dataset = torchvision.datasets.ImageFolder(
@@ -202,13 +210,20 @@ def test_cnn():
     )
     
     for img, labels in data_loader_train: 
-        conv_layer = torch.nn.Conv2d(3, 1, kernel_size=(5, 5))
-        img_return = conv_layer(img).detach().numpy()[1].T
-        plt.imshow(img_return)
+        # image = torch.from_numpy(plt.imread("human_detection_dataset/human/1.png"))
+        conv_layer = torch.nn.Conv2d(3, 3, kernel_size=(3, 3), padding = 3)
+        conv_layer2 = torch.nn.MaxPool2d((2, 2))
+        conv_layer3 = torch.nn.Conv2d(3, 3, kernel_size=(2, 2), padding = 3)
+
+        img = conv_layer(img)
+        img = conv_layer2(img)
+        img_return = conv_layer3(img).detach()[0].numpy().T
+
+        print(img_return)
+        plt.imshow((img_return * 255).astype(np.uint8))
         plt.show()
         break
 
 
 
-
-test_cnn() 
+split_dataset()
