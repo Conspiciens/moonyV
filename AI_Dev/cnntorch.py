@@ -8,6 +8,10 @@ import os
 from torchsummary import summary 
 import matplotlib.pyplot as plt
 import numpy as np
+# from utils.plotting import *
+
+plt.style.use('ggplot')
+plt.rcParams.update({'font.size': 16, 'axes.labelweight': 'bold', 'axes.grid': False})
 
 dataset_dir = "human_detection_dataset/"
 
@@ -169,6 +173,42 @@ def split_dataset():
 
 
 
+def test_cnn(): 
+    transform = transforms.Compose([
+        transforms.Resize((180, 180)), 
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean = [0.5, 0.491, 0.468], 
+            std = [0.197, 0.195, 0.196]
+        )
+    ])
+
+    dataset = torchvision.datasets.ImageFolder(
+        root = dataset_dir,
+        transform = transform
+    )
+
+    train_size = int(0.8 * len(dataset)) 
+    test_size = len(dataset) - train_size
+
+    train_set, test_set = torch.utils.data.random_split(
+        dataset, 
+        [train_size, test_size]
+    )
+
+    data_loader_train = torch.utils.data.DataLoader(
+        train_set, 32, 
+        shuffle = True, 
+    )
+    
+    for img, labels in data_loader_train: 
+        conv_layer = torch.nn.Conv2d(3, 1, kernel_size=(5, 5))
+        img_return = conv_layer(img).detach().numpy()[1].T
+        plt.imshow(img_return)
+        plt.show()
+        break
 
 
-split_dataset()
+
+
+test_cnn() 
