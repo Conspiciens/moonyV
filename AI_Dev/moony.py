@@ -113,7 +113,7 @@ def connect_to_client(private_ip: str) -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind(( private_ip, PORT ))
         print('Listening at {}'.format(sock.getsockname()))
-        sock.listen(2)
+        sock.listen(1)
         conn, addr = sock.accept() 
 
         # Removed sock as global for multi-threading i/o task
@@ -172,25 +172,42 @@ def handle_client(vid, clientthread):
         
         collect_data(frame)
 
+        # if a connection exists 
         if conn: 
-            a = pickle.dumps(collect_data(frame))
+            a = pickle.dumps(frame)
             message = struct.pack("Q", len(a)) + a
-            conn.sendall(message)
+            try: 
+                conn.sendall(message)
+            except socket.error: 
+                conn = None 
+                clientthread = None 
+                sock = None 
+                addr = None 
+                continue
             key = cv2.waitKey(13)
             if key == 13: 
                 conn.close() 
+                clientthread = None
+                sock = None
+                conn = None 
+                addr = None
+            
+        # if connection exists then join to the main thread
+        if (addr is not None 
+            and clientthread is not None 
+            and clientthread.is_alive() == False): 
+            clientthread.join() 
     
+        # if no thread exists then start checking if private IP exists 
         if (conn == None 
-        and clientthread is not None  
-        and clientthread.is_alive() == False): 
+            and clientthread is None): 
             private_ip = get_private_ip()
             if not private_ip: 
                 continue
-            sock = connect_to_client(private_ip)
-            clientthread.join()
+            clientthread = threading.Thread(None, connect_to_client, args=(private_ip,))
+            clientthread.start() 
             if sock is None: 
                 continue
-            conn, addr = sock.accept() 
 
 
 if __name__ == '__main__':
